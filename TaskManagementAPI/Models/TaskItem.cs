@@ -13,5 +13,11 @@ namespace TaskManagementAPI.Models
         public TaskPriority Priority { get; set; } = TaskPriority.Medium;
         
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+        
+
+        // YENİ EKLENEN KISIM: Yabancı Anahtar (Foreign Key) ve Navigasyon
+        public int UserId { get; set; }
+        public User? User { get; set; } // "?" işareti, başlangıçta uyarı vermemesi için Nullable yapar
+        public bool IsCompleted { get; internal set; }
     }
 }

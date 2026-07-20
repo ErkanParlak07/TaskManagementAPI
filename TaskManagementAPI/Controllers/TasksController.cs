@@ -1,30 +1,43 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TaskManagementAPI.Dtos;
 using TaskManagementAPI.Models;
 using TaskManagementAPI.Services;
+using System.Security.Claims;
+using TaskManagementAPI.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace TaskManagementAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class TasksController : ControllerBase
     {
+       private readonly AppDbContext _context;
         private readonly ITaskService _taskService;
 
-        public TasksController(ITaskService taskService)
+        // İki bağımlılığı da TEK BİR yapıcı metot (Constructor) içinde aynı anda alıyoruz
+        public TasksController(AppDbContext context, ITaskService taskService)
         {
+            _context = context;
             _taskService = taskService;
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<TaskResponseDto>>> GetAll([FromQuery] Models.TaskStatus? status, [FromQuery] TaskPriority? priority)
-        {
-            var tasks = await _taskService.GetAllTasksAsync(status, priority);
-            return Ok(tasks);
-        }
+       [HttpGet]
+public async Task<IActionResult> GetTasks()
+{
+    // 1. Sisteme giriş yapmış olan kullanıcının ID'sini Token'dan okuyoruz
+    // Token'dan ID okuma satırının son hali (Sarı uyarıyı yok eder)
+var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
 
+    // 2. Veritabanından SADECE bu kullanıcıya ait olan görevleri çekiyoruz!
+    var tasks = await _context.Tasks.Where(t => t.UserId == userId).ToListAsync();
+    
+    return Ok(tasks);
+}
         [HttpGet("{id}")]
         public async Task<ActionResult<TaskResponseDto>> GetById(int id)
         {
@@ -37,11 +50,26 @@ namespace TaskManagementAPI.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<TaskResponseDto>> Create([FromBody] CreateTaskDto createTaskDto)
-        {
-            var createdTask = await _taskService.CreateTaskAsync(createTaskDto);
-            return CreatedAtAction(nameof(GetById), new { id = createdTask.Id }, createdTask);
-        }
+public async Task<IActionResult> CreateTask(CreateTaskDto taskDto) // DTO adın neyse ona göre düzelt
+{
+    // 1. Yine Token'dan kullanıcının ID'sini yakalıyoruz
+    // Token'dan ID okuma satırının son hali (Sarı uyarıyı yok eder)
+var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+    var newTask = new TaskItem // Kendi modelinin adıyla (Örn: TaskItem) değiştir
+    {
+        Title = taskDto.Title,
+        Description = taskDto.Description,
+        Priority = taskDto.Priority,
+        Status = 0,
+        UserId = userId // İŞTE HATAYI ÇÖZEN SİHİRLİ SATIR BURASI! Görevi kullanıcıya bağlıyoruz.
+    };
+
+    _context.Tasks.Add(newTask);
+    await _context.SaveChangesAsync();
+
+    return Ok(newTask);
+}
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateTaskDto updateTaskDto)

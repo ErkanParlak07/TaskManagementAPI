@@ -14,5 +14,6 @@ namespace TaskManagementAPI.Data
         // DbSet<...>, veritabanındaki bir Tabloyu temsil eder. 
         // Burada Entity Framework'e diyoruz ki: "TaskItem modelimi al, veritabanında 'Tasks' adında bir tabloya dönüştür."
         public DbSet<TaskItem> Tasks { get; set; }
+        public DbSet<User> Users { get; set; }
     }
 }
