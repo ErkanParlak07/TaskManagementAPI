@@ -74,7 +74,10 @@ namespace TaskManagementAPI.Controllers
             {
                 id = t.Id,
                 title = t.Title, // DİKKAT: C# modelinde görev adı Title değil de Name ise burayı t.Name yap
+                Description = t.Description, 
+                Priority = (int)t.Priority,
                 isCompleted = t.IsCompleted,
+                
                 statusName = t.Status.ToString()
             }).ToList();
 
@@ -106,8 +109,71 @@ namespace TaskManagementAPI.Controllers
         // Güncellenmiş DTO (Artık detay ve öncelik de alıyor)
         public class AdminAssignTaskDto
         {
+            public int Id { get; set; }
             public string Title { get; set; }
-            public string Description { get; set; }
-            public int Priority { get; set; } // 0: Düşük, 1: Orta, 2: Yüksek
+            public string Description { get; set; } // Bu eksik olabilir
+            public int Priority { get; set; }       
+            public bool IsCompleted { get; set; }
         }
+        [HttpGet("logs")]
+[Authorize(Roles = "Admin")] // Sadece adminler görebilsin
+public async Task<IActionResult> GetSecurityLogs()
+{
+    // Son 10 başarılı giriş
+    var recentLogins = await _context.LoginLogs
+        .Where(l => l.IsSuccess)
+        .OrderByDescending(l => l.AttemptDate)
+        .Take(10)
+        .ToListAsync();
+
+    // Son 10 hatalı deneme
+    var failedLogins = await _context.LoginLogs
+        .Where(l => !l.IsSuccess)
+        .OrderByDescending(l => l.AttemptDate)
+        .Take(10)
+        .ToListAsync();
+
+    return Ok(new { recentLogins, failedLogins });
+}
+// 1. GÖREV GÜNCELLEME METODU (PUT)
+[HttpPut("tasks/{id}")]
+public async Task<IActionResult> UpdateTask(int id, [FromBody] TaskItem model) 
+{
+    // Görevi veritabanında bul
+    var task = await _context.Tasks.FindAsync(id);
+    if (task == null)
+    {
+        return NotFound("Görev bulunamadı.");
+    }
+
+    // Yeni değerleri üzerine yaz
+    task.Title = model.Title;
+    task.Description = model.Description;
+    task.Priority = model.Priority;
+    task.IsCompleted = model.IsCompleted;
+    task.Status = model.Status;
+
+    // Veritabanını güncelle
+    _context.Tasks.Update(task);
+    await _context.SaveChangesAsync();
+
+    return Ok(new { message = "Görev başarıyla güncellendi." });
+}
+// 2. GÖREV SİLME METODU (DELETE)
+[HttpDelete("tasks/{id}")]
+public async Task<IActionResult> DeleteTask(int id)
+{
+    // Görevi veritabanında bul
+    var task = await _context.Tasks.FindAsync(id);
+    if (task == null)
+    {
+        return NotFound("Silinecek görev bulunamadı.");
+    }
+
+    // Görevi veritabanından tamamen sil (Eğer isDeleted kullanıyorsan soft-delete de yapabilirsin)
+    _context.Tasks.Remove(task);
+    await _context.SaveChangesAsync();
+
+    return Ok(new { message = "Görev başarıyla silindi." });
+}
 }}

@@ -62,7 +62,7 @@ var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
         Description = taskDto.Description,
         Priority = taskDto.Priority,
         Status = 0,
-        UserId = userId // İŞTE HATAYI ÇÖZEN SİHİRLİ SATIR BURASI! Görevi kullanıcıya bağlıyoruz.
+        UserId = userId // Görevi kullanıcıya bağlıyoruz.
     };
 
     _context.Tasks.Add(newTask);
@@ -71,15 +71,19 @@ var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
     return Ok(newTask);
 }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] UpdateTaskDto updateTaskDto)
+        // Sadece görevi tamamlandı olarak işaretleyen özel metod
+        [HttpPut("{id}/complete")]
+        public async Task<IActionResult> CompleteTask(int id)
         {
-            var updatedTask = await _taskService.UpdateTaskAsync(id, updateTaskDto);
-            if (updatedTask == null)
-            {
-                return NotFound(new { Message = $"{id} numaralı görev bulunamadı, güncelleme başarısız." });
-            }
-            return Ok(updatedTask);
+            var task = await _context.Tasks.FindAsync(id);
+            if (task == null) return NotFound("Görev bulunamadı.");
+            task.IsCompleted = true;
+                task.Status = (Models.TaskStatus)(int)2;
+            // task.Status = 2; // Eğer projende Status diye ayrı bir kolon da kullanıyorsan başındaki // işaretini kaldırıp bunu da ekleyebilirsin.
+
+            await _context.SaveChangesAsync();
+            
+            return Ok(new { message = "Görev başarıyla tamamlandı." });
         }
 
         [HttpDelete("{id}")]

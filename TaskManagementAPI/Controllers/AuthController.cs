@@ -56,22 +56,39 @@ namespace TaskManagementAPI.Controllers
         {
             // Veritabanında bu kullanıcı adını ara
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
-            
-            // Kullanıcı yoksa veya şifreler eşleşmiyorsa hata ver
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+
+            // 1. DURUM: Kullanıcı veritabanında hiç yoksa
+            if (user == null)
             {
+                _context.LoginLogs.Add(new LoginLog { Username = request.Username, AttemptDate = DateTime.Now, IsSuccess = false, ErrorMessage = "Kullanıcı Yok" });
+                await _context.SaveChangesAsync();
                 return BadRequest("Kullanıcı adı veya şifre hatalı.");
             }
-            // YENİ EKLENEN GÜVENLİK DUVARI: Kullanıcı Soft Delete yemişse içeri alma!
+
+            // 2. DURUM: Kullanıcı var ama BCrypt şifresi uyuşmuyorsa
+            if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            {
+                _context.LoginLogs.Add(new LoginLog { Username = request.Username, AttemptDate = DateTime.Now, IsSuccess = false, ErrorMessage = "Şifre Hatalı" });
+                await _context.SaveChangesAsync();
+                return BadRequest("Kullanıcı adı veya şifre hatalı.");
+            }
+
+            // 3. DURUM: Kullanıcı Soft Delete (Pasif) yemişse
             if (user.IsDeleted)
             {
+                _context.LoginLogs.Add(new LoginLog { Username = request.Username, AttemptDate = DateTime.Now, IsSuccess = false, ErrorMessage = "Hesap Pasif" });
+                await _context.SaveChangesAsync();
                 return BadRequest("Bu hesap sistem yöneticisi tarafından askıya alınmış veya silinmiştir.");
             }
 
+            // 4. DURUM: Her şey doğruysa (Başarılı Giriş)
+            _context.LoginLogs.Add(new LoginLog { Username = request.Username, AttemptDate = DateTime.Now, IsSuccess = true, ErrorMessage = "Başarılı" });
+            await _context.SaveChangesAsync();
+
             // Her şey doğruysa kullanıcıya özel dijital anahtar (Token) üret
             string token = CreateToken(user);
-            
-            return Ok(new { Token = token }); // Token'ı JSON olarak Frontend'e gönder
+
+            return Ok(new { Token = token });
         }
 
         // --- 3. JWT ÜRETME (TOKEN GENERATION) METODU ---
